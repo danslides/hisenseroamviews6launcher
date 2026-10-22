@@ -15,7 +15,7 @@ public class DiagnosticActivity extends Activity {
     private long lastMotion;
     @Override public void onCreate(Bundle state){
         super.onCreate(state); Ui.immersive(this);
-        LinearLayout root=new LinearLayout(this);root.setOrientation(1);int pad=Ui.dp(this,20);root.setPadding(pad,pad,pad,pad);
+        LinearLayout root=new LinearLayout(this);root.setOrientation(LinearLayout.VERTICAL);int pad=Ui.dp(this,20);root.setPadding(pad,pad,pad,pad);
         root.addView(Ui.text(this,"Remote laboratory",26));
         root.addView(Ui.text(this,"Turn pointer mode OFF. Test ↑ ↓ ← → and OK, then repeat with pointer mode ON. Back exits.",15));
         GridLayout probes=new GridLayout(this);probes.setColumnCount(3);
