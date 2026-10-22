@@ -7,22 +7,33 @@ import android.view.*;
 import android.widget.*;
 import java.util.ArrayDeque;
 
-/** Observes events delivered to this activity, without rewriting key codes. */
+/** Shows complete gestures, including short synthetic swipes from vendor remotes. */
 public class DiagnosticActivity extends Activity {
     private TextView log;
     private final ArrayDeque<String> lines=new ArrayDeque<>();
-    private String header;
-    private long lastMotion;
+    private String header="";
+    private float startX,startY,lastX,lastY;
+    private long started,lastHover;
+    private int moves,device,source;
+    private boolean tracking;
     @Override public void onCreate(Bundle state){
         super.onCreate(state); Ui.immersive(this);
-        LinearLayout root=new LinearLayout(this);root.setOrientation(LinearLayout.VERTICAL);int pad=Ui.dp(this,20);root.setPadding(pad,pad,pad,pad);
-        root.addView(Ui.text(this,"Remote laboratory",26));
-        root.addView(Ui.text(this,"Turn pointer mode OFF. Test ↑ ↓ ← → and OK, then repeat with pointer mode ON. Back exits.",15));
+        LinearLayout root=new LinearLayout(this);root.setOrientation(LinearLayout.VERTICAL);
+        int pad=Ui.dp(this,16);root.setPadding(pad,pad,pad,pad);
+        root.addView(Ui.text(this,"Remote test 0.2 — complete gestures",24));
+        root.addView(Ui.text(this,"Cursor OFF: press Right, Left, Up, Down, OK slowly, in that order. Latest result is at the top.",14));
+        LinearLayout controls=new LinearLayout(this);
+        Button clear=new Button(this);clear.setText("Clear results");
+        Button copy=new Button(this);copy.setText("Copy report");
+        controls.addView(clear,new LinearLayout.LayoutParams(0,-2,1));
+        controls.addView(copy,new LinearLayout.LayoutParams(0,-2,1));root.addView(controls);
         GridLayout probes=new GridLayout(this);probes.setColumnCount(3);
         Button[] buttons=new Button[6];
         for(int i=0;i<6;i++){
             final int n=i; Button b=new Button(this);buttons[i]=b;b.setText("Tile "+(i+1));b.setId(View.generateViewId());Ui.focusable(b);
-            GridLayout.LayoutParams lp=new GridLayout.LayoutParams();lp.width=0;lp.height=Ui.dp(this,64);lp.columnSpec=GridLayout.spec(GridLayout.UNDEFINED,1f);lp.setMargins(4,4,4,4);probes.addView(b,lp);
+            b.setFocusableInTouchMode(true);
+            GridLayout.LayoutParams lp=new GridLayout.LayoutParams();lp.width=0;lp.height=Ui.dp(this,48);
+            lp.columnSpec=GridLayout.spec(GridLayout.UNDEFINED,1f);lp.setMargins(4,4,4,4);probes.addView(b,lp);
             b.setOnClickListener(v->record("ACTIVATE Tile "+(n+1)));
             b.setOnFocusChangeListener((v,focus)->{if(focus)record("FOCUS Tile "+(n+1));});
         }
@@ -30,31 +41,58 @@ public class DiagnosticActivity extends Activity {
             buttons[i].setNextFocusLeftId(buttons[i%3==0?i:i-1].getId());
             buttons[i].setNextFocusRightId(buttons[i%3==2?i:i+1].getId());
             buttons[i].setNextFocusUpId(buttons[i<3?i:i-3].getId());
-            if(i<3)buttons[i].setNextFocusDownId(buttons[i+3].getId());
+            buttons[i].setNextFocusDownId(buttons[i>=3?i:i+3].getId());
         }
         root.addView(probes);
-        Button copy=new Button(this);copy.setText("Copy diagnostic report");copy.setId(View.generateViewId());root.addView(copy);
-        for(int i=3;i<6;i++)buttons[i].setNextFocusDownId(copy.getId());copy.setNextFocusUpId(buttons[3].getId());
-        log=Ui.text(this,"",11);log.setTypeface(android.graphics.Typeface.MONOSPACE);
-        ScrollView scroll=new ScrollView(this);scroll.setFocusable(false);scroll.addView(log);root.addView(scroll,new LinearLayout.LayoutParams(-1,0,1));
-        StringBuilder devices=new StringBuilder();
-        for(int id:InputDevice.getDeviceIds()){InputDevice d=InputDevice.getDevice(id);if(d!=null)devices.append("\nINPUT ").append(id).append(' ').append(d.getName()).append(" sources=0x").append(Integer.toHexString(d.getSources()));}
-        header="Roam Launcher 0.1\nModel="+android.os.Build.MODEL+" manufacturer="+android.os.Build.MANUFACTURER+" Android="+android.os.Build.VERSION.RELEASE+" API="+android.os.Build.VERSION.SDK_INT+devices+"\n";
-        copy.setOnClickListener(v->{((android.content.ClipboardManager)getSystemService(CLIPBOARD_SERVICE)).setPrimaryClip(ClipData.newPlainText("Remote diagnostics",header+android.text.TextUtils.join("\n",lines)));Toast.makeText(this,"Report copied",Toast.LENGTH_SHORT).show();});
-        setContentView(root);record("READY · expected D-pad: UP 19 / DOWN 20 / LEFT 21 / RIGHT 22 / CENTER 23");buttons[0].requestFocus();
+        header="Model="+android.os.Build.MODEL+" Android="+android.os.Build.VERSION.RELEASE+" API="+android.os.Build.VERSION.SDK_INT;
+        root.addView(Ui.text(this,header,12));
+        log=Ui.text(this,"",14);log.setTypeface(android.graphics.Typeface.MONOSPACE);
+        ScrollView scroll=new ScrollView(this);scroll.setFocusable(false);scroll.addView(log);
+        root.addView(scroll,new LinearLayout.LayoutParams(-1,0,1));
+        clear.setOnClickListener(v->{lines.clear();tracking=false;record("READY — Right, Left, Up, Down, OK");});
+        copy.setOnClickListener(v->{((android.content.ClipboardManager)getSystemService(CLIPBOARD_SERVICE)).setPrimaryClip(ClipData.newPlainText("Remote diagnostics",header+"\n"+android.text.TextUtils.join("\n",lines)));Toast.makeText(this,"Report copied",Toast.LENGTH_SHORT).show();});
+        setContentView(root);buttons[0].requestFocus();record("READY — Right, Left, Up, Down, OK");
     }
     private void record(String value){
-        android.util.Log.i("RoamKeys",value);lines.addLast(value);while(lines.size()>65)lines.removeFirst();
-        if(log!=null){StringBuilder b=new StringBuilder(header==null?"":header);java.util.Iterator<String> it=lines.descendingIterator();while(it.hasNext())b.append(it.next()).append('\n');log.setText(b.toString());}
+        android.util.Log.i("RoamKeys",value);lines.addFirst(value);while(lines.size()>50)lines.removeLast();
+        if(log!=null)log.setText(android.text.TextUtils.join("\n",lines));
     }
     @Override public boolean dispatchKeyEvent(KeyEvent e){
-        record((e.getAction()==KeyEvent.ACTION_DOWN?"ACTION_DOWN":e.getAction()==KeyEvent.ACTION_UP?"ACTION_UP":"ACTION_MULTIPLE")+" "+KeyEvent.keyCodeToString(e.getKeyCode())+" code="+e.getKeyCode()+" scan="+e.getScanCode()+" repeat="+e.getRepeatCount()+" device="+e.getDeviceId()+" source=0x"+Integer.toHexString(e.getSource()));
+        String action=e.getAction()==KeyEvent.ACTION_DOWN?"DOWN":e.getAction()==KeyEvent.ACTION_UP?"UP":"MULTIPLE";
+        record("KEY "+action+" "+KeyEvent.keyCodeToString(e.getKeyCode())+" repeat="+e.getRepeatCount()+" device="+e.getDeviceId());
         return super.dispatchKeyEvent(e);
     }
-    @Override public boolean dispatchGenericMotionEvent(MotionEvent e){motion(e);return super.dispatchGenericMotionEvent(e);}
-    @Override public boolean dispatchTouchEvent(MotionEvent e){motion(e);return super.dispatchTouchEvent(e);}
-    private void motion(MotionEvent e){
-        long now=android.os.SystemClock.uptimeMillis();if(now-lastMotion<250 && e.getActionMasked()!=MotionEvent.ACTION_DOWN)return;lastMotion=now;
-        record("MOTION "+MotionEvent.actionToString(e.getAction())+" device="+e.getDeviceId()+" source=0x"+Integer.toHexString(e.getSource())+" x="+(int)e.getX()+" y="+(int)e.getY()+" scroll="+e.getAxisValue(MotionEvent.AXIS_VSCROLL));
+    @Override public boolean dispatchTouchEvent(MotionEvent e){
+        int action=e.getActionMasked();
+        if(action==MotionEvent.ACTION_DOWN){
+            if(tracking)finishGesture("INCOMPLETE",lastX,lastY,e.getEventTime());
+            startX=lastX=e.getX();startY=lastY=e.getY();started=e.getEventTime();moves=0;device=e.getDeviceId();source=e.getSource();tracking=true;
+            record("START device="+device+" at "+(int)startX+","+(int)startY);
+        }else if(tracking){
+            lastX=e.getX();lastY=e.getY();
+            if(action==MotionEvent.ACTION_MOVE){
+                moves+=1+e.getHistorySize();
+                // Keep the newest movement visible even if firmware never sends UP.
+                String live="MOVE device="+device+" dx="+(int)(lastX-startX)+" dy="+(int)(lastY-startY);
+                if(!lines.isEmpty() && lines.peekFirst().startsWith("MOVE "))lines.removeFirst();
+                record(live);
+            }else if(action==MotionEvent.ACTION_UP || action==MotionEvent.ACTION_CANCEL){
+                finishGesture(action==MotionEvent.ACTION_UP?"END":"CANCEL",lastX,lastY,e.getEventTime());
+            }
+        }else record("TOUCH "+MotionEvent.actionToString(action)+" device="+e.getDeviceId());
+        return super.dispatchTouchEvent(e);
+    }
+    private void finishGesture(String status,float x,float y,long time){
+        record(status+" device="+device+" source=0x"+Integer.toHexString(source)
+            +" from "+(int)startX+","+(int)startY+" to "+(int)x+","+(int)y
+            +" dx="+(int)(x-startX)+" dy="+(int)(y-startY)+" moves="+moves+" ms="+(time-started));
+        tracking=false;
+    }
+    @Override public boolean dispatchGenericMotionEvent(MotionEvent e){
+        long now=android.os.SystemClock.uptimeMillis();
+        if(e.getActionMasked()==MotionEvent.ACTION_SCROLL || now-lastHover>1000){
+            lastHover=now;record("POINTER "+MotionEvent.actionToString(e.getAction())+" device="+e.getDeviceId()+" scroll="+e.getAxisValue(MotionEvent.AXIS_VSCROLL));
+        }
+        return super.dispatchGenericMotionEvent(e);
     }
 }
