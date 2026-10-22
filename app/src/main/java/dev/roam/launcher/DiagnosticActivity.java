@@ -48,7 +48,7 @@ public class DiagnosticActivity extends Activity {
         if(log!=null){StringBuilder b=new StringBuilder(header==null?"":header);java.util.Iterator<String> it=lines.descendingIterator();while(it.hasNext())b.append(it.next()).append('\n');log.setText(b.toString());}
     }
     @Override public boolean dispatchKeyEvent(KeyEvent e){
-        record(KeyEvent.actionToString(e.getAction())+" "+KeyEvent.keyCodeToString(e.getKeyCode())+" code="+e.getKeyCode()+" scan="+e.getScanCode()+" repeat="+e.getRepeatCount()+" device="+e.getDeviceId()+" source=0x"+Integer.toHexString(e.getSource()));
+        record((e.getAction()==KeyEvent.ACTION_DOWN?"ACTION_DOWN":e.getAction()==KeyEvent.ACTION_UP?"ACTION_UP":"ACTION_MULTIPLE")+" "+KeyEvent.keyCodeToString(e.getKeyCode())+" code="+e.getKeyCode()+" scan="+e.getScanCode()+" repeat="+e.getRepeatCount()+" device="+e.getDeviceId()+" source=0x"+Integer.toHexString(e.getSource()));
         return super.dispatchKeyEvent(e);
     }
     @Override public boolean dispatchGenericMotionEvent(MotionEvent e){motion(e);return super.dispatchGenericMotionEvent(e);}
