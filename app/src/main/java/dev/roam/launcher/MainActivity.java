@@ -74,7 +74,7 @@ public class MainActivity extends Activity {
             for(ResolveInfo r:pm.queryIntentActivities(new Intent(Intent.ACTION_MAIN).addCategory(cat),0))
                 if(!r.activityInfo.packageName.equals(getPackageName())) unique.put(r.activityInfo.packageName,r);
         }
-        ArrayList<ResolveInfo> apps=new ArrayList<>(unique.values()); apps.sort((a,b)->a.loadLabel(pm).toString().compareToIgnoreCase(b.loadLabel(pm).toString()));
+        ArrayList<ResolveInfo> apps=new ArrayList<>(unique.values()); Collections.sort(apps,(a,b)->a.loadLabel(pm).toString().compareToIgnoreCase(b.loadLabel(pm).toString()));
         for(ResolveInfo r:apps) {
             ComponentName c=new ComponentName(r.activityInfo.packageName,r.activityInfo.name);
             entries.add(new Entry(c.flattenToString(),r.loadLabel(pm).toString(),r.loadIcon(pm),()->startActivity(new Intent(Intent.ACTION_MAIN).setComponent(c).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK|Intent.FLAG_ACTIVITY_RESET_TASK_IF_NEEDED))));
